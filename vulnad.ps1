@@ -202,7 +202,7 @@ function VulnAD-DefaultPassword {
 }
 function VulnAD-PasswordSpraying {
     $same_password = "ncc1701";
-    $secure_password_string = (Get-SecureString -String $password)
+    $secure_password_string = (Get-SecureString -String $same_password)
     Write-Info "Secure String: $secure_password_string"
     for ($i=1; $i -le (Get-Random -Maximum 12); $i=$i+1 ) {
         $randomuser = (VulnAD-GetRandom -InputList $Global:CreatedUsers)
