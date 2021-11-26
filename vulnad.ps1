@@ -32,6 +32,10 @@ function ShowBanner {
         Write-Host $_ -ForegroundColor (Get-Random -Input @('Green','Cyan','Yellow','gray','white'))
     }                             
 }
+function Get-SecureString {
+   Param( $String )
+   return ConvertTo-SecureString $String -AsPlainText -Force
+}
 function VulnAD-GetRandom {
    Param(
      [array]$InputList
@@ -66,7 +70,9 @@ function VulnAD-AddADUser {
         $principalname = "{0}.{1}" -f ($firstname, $lastname);
         $generated_password = ([System.Web.Security.Membership]::GeneratePassword(12,2))
         Write-Info "Creating $SamAccountName User"
-        Try { New-ADUser -Name "$firstname $lastname" -GivenName $firstname -Surname $lastname -SamAccountName $SamAccountName -UserPrincipalName $principalname@$Global:Domain -AccountPassword (ConvertTo-SecureString $generated_password -AsPlainText -Force) -PassThru | Enable-ADAccount } Catch {}
+        $secure_password_string = (Get-SecureString -String $generated_password)
+        Write-Info "Secure String: $secure_password_string"
+        Try { New-ADUser -Name "$firstname $lastname" -GivenName $firstname -Surname $lastname -SamAccountName $SamAccountName -UserPrincipalName $principalname@$Global:Domain -AccountPassword $secure_password_string -PassThru | Enable-ADAccount } Catch {}
         $Global:CreatedUsers += $SamAccountName;
     }
 
@@ -133,15 +139,19 @@ function VulnAD-Kerberoasting {
     $svc = $selected_service.split(',')[0];
     $spn = $selected_service.split(',')[1];
     $password = VulnAD-GetRandom -InputList $Global:BadPasswords;
+    $secure_password_string = (Get-SecureString -String $password)
     Write-Info "Kerberoasting $svc $spn"
-    Try { New-ADServiceAccount -Name $svc -ServicePrincipalNames "$svc/$spn.$Global:Domain" -AccountPassword (ConvertTo-SecureString $password -AsPlainText -Force) -RestrictToSingleComputer -PassThru } Catch {}
+    Write-Info "Secure String: $secure_password_string"
+    Try { New-ADServiceAccount -Name $svc -ServicePrincipalNames "$svc/$spn.$Global:Domain" -AccountPassword $secure_password_string -RestrictToSingleComputer -PassThru } Catch {}
     foreach ($sv in $Global:ServicesAccountsAndSPNs) {
         if ($selected_service -ne $sv) {
             $svc = $sv.split(',')[0];
             $spn = $sv.split(',')[1];
             Write-Info "Creating $svc services account"
             $password = ([System.Web.Security.Membership]::GeneratePassword(12,2))
-            Try { New-ADServiceAccount -Name $svc -ServicePrincipalNames "$svc/$spn.$Global:Domain" -RestrictToSingleComputer -AccountPassword (ConvertTo-SecureString $password -AsPlainText -Force) -PassThru } Catch {}
+            $secure_password_string = (Get-SecureString -String $password)
+            Write-Info "Secure String: $secure_password_string"
+            Try { New-ADServiceAccount -Name $svc -ServicePrincipalNames "$svc/$spn.$Global:Domain" -RestrictToSingleComputer -AccountPassword $secure_password_string -PassThru } Catch {}
 
         }
     }
@@ -150,7 +160,9 @@ function VulnAD-ASREPRoasting {
     for ($i=1; $i -le (Get-Random -Maximum 6); $i=$i+1 ) {
         $randomuser = (VulnAD-GetRandom -InputList $Global:CreatedUsers)
         $password = VulnAD-GetRandom -InputList $Global:BadPasswords;
-        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword (ConvertTo-SecureString $password -AsPlainText -Force)
+        $secure_password_string = (Get-SecureString -String $password)
+        Write-Info "Secure String: $secure_password_string"
+        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword $secure_password_string
         Set-ADAccountControl -Identity $randomuser -DoesNotRequirePreAuth 1
         Write-Info "AS-REPRoasting $randomuser"
     }
@@ -169,7 +181,9 @@ function VulnAD-PwdInObjectDescription {
     for ($i=1; $i -le (Get-Random -Maximum 6); $i=$i+1 ) {
         $randomuser = (VulnAD-GetRandom -InputList $Global:CreatedUsers)
         $password = ([System.Web.Security.Membership]::GeneratePassword(12,2))
-        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword (ConvertTo-SecureString $password -AsPlainText -Force)
+        $secure_password_string = (Get-SecureString -String $password)
+        Write-Info "Secure String: $secure_password_string"
+        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword $secure_password_string
         Set-ADUser $randomuser -Description "User Password $password"
         Write-Info "Password in Description : $randomuser"
     }
@@ -178,7 +192,9 @@ function VulnAD-DefaultPassword {
     for ($i=1; $i -le (Get-Random -Maximum 5); $i=$i+1 ) {
         $randomuser = (VulnAD-GetRandom -InputList $Global:CreatedUsers)
         $password = "Changeme123!";
-        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword (ConvertTo-SecureString $password -AsPlainText -Force)
+        $secure_password_string = (Get-SecureString -String $password)
+        Write-Info "Secure String: $secure_password_string"
+        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword $secure_password_string
         Set-ADUser $randomuser -Description "New User ,DefaultPassword"
         Set-AdUser $randomuser -ChangePasswordAtLogon $true
         Write-Info "Default Password : $randomuser"
@@ -186,9 +202,11 @@ function VulnAD-DefaultPassword {
 }
 function VulnAD-PasswordSpraying {
     $same_password = "ncc1701";
+    $secure_password_string = (Get-SecureString -String $password)
+    Write-Info "Secure String: $secure_password_string"
     for ($i=1; $i -le (Get-Random -Maximum 12); $i=$i+1 ) {
         $randomuser = (VulnAD-GetRandom -InputList $Global:CreatedUsers)
-        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword (ConvertTo-SecureString $same_password -AsPlainText -Force)
+        Set-AdAccountPassword -Identity $randomuser -Reset -NewPassword $secure_password_string
         Set-ADUser $randomuser -Description "Shared User"
         Write-Info "Same Password (Password Spraying) : $randomuser"
     }
